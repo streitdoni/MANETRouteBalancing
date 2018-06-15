@@ -230,8 +230,6 @@ double AODVQoSRouting::determineQoSRREQTreatment(double requiredBandwidth, doubl
     /****************************
      *Determining available bandwidth
      *****************************/
-    InterfaceEntry *ifEntry = interfaceTable->getInterfaceByName("wlan0");
-    auto test = ifEntry->getDatarate();
     double theoreticalAvailableBytes = (isIntermediate ? (2000000 / 8) / maxHops : (2000000 / 8)) * 0.90;
 
     double currentAvailability = (1 / theoreticalAvailableBytes * (theoreticalAvailableBytes - overheadByte));
