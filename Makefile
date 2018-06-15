@@ -2,7 +2,7 @@
 # OMNeT++/OMNEST Makefile for UtilizationEvaluation
 #
 # This file was generated with the command:
-#  opp_makemake -f --deep -O out -KINETMANET_3_0_PROJ=/home/klement/Repositories/Simulations/Framworks/inetmanet-3.x -DINET_IMPORT -I. -I$$\(INETMANET_3_0_PROJ\)/src -L$$\(INETMANET_3_0_PROJ\)/src -lINET$$\(D\)
+#  opp_makemake -f --deep -O out -KINETMANET_3_0_PROJ=../inetmanet-3.x -DINET_IMPORT -I. -I$$\(INETMANET_3_0_PROJ\)/src -L$$\(INETMANET_3_0_PROJ\)/src -lINET$$\(D\)
 #
 
 # Name of target to be created (-o option)
@@ -40,7 +40,7 @@ MSGFILES = \
 SMFILES =
 
 # Other makefile variables (-K)
-INETMANET_3_0_PROJ=/home/klement/Repositories/Simulations/Framworks/inetmanet-3.x
+INETMANET_3_0_PROJ=../inetmanet-3.x
 
 #------------------------------------------------------------------------------
 

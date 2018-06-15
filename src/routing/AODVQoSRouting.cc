@@ -230,10 +230,12 @@ double AODVQoSRouting::determineQoSRREQTreatment(double requiredBandwidth, doubl
     /****************************
      *Determining available bandwidth
      *****************************/
-    double theoreticalAvailableBytes = isIntermediate ? (2000000 / 8) / maxHops : (2000000 / 8);
+    InterfaceEntry *ifEntry = interfaceTable->getInterfaceByName("wlan0");
+    auto test = ifEntry->getDatarate();
+    double theoreticalAvailableBytes = (isIntermediate ? (2000000 / 8) / maxHops : (2000000 / 8)) * 0.90;
 
     double currentAvailability = (1 / theoreticalAvailableBytes * (theoreticalAvailableBytes - overheadByte));
-    double requiredResources = ((requiredBandwidth+14+36+28+8) / requiredSlotTime) * 1000;
+    double requiredResources = ((requiredBandwidth + 14 + 36 + 28 + 8) / requiredSlotTime) * 1000;
 
     if (currentAvailability >= 0.9)
     {
@@ -249,7 +251,7 @@ double AODVQoSRouting::determineQoSRREQTreatment(double requiredBandwidth, doubl
         }
         else if (capacityLeft < 0.5)
         {
-            return (nodeTraversalTime * (ttlStart + timeoutBuffer)).dbl();
+            return 1.5 * (nodeTraversalTime * (2 * 12 + timeoutBuffer)).dbl();
         }
         else
         {
@@ -934,7 +936,20 @@ void AODVQoSRouting::handleRREP(AODVQoSRREP *rrep, const L3Address& sourceAddr)
     {
         if (hasOngoingRouteDiscovery(rrep->getDestAddr()))
         {
-            totalNodeUtilzation[ { rrep->getOriginatorAddr(), rrep->getDestAddr() }] = new NodeUtilization(rrep->getTotalHopsToDest(), NodeUtilization::Position::SENDER);
+            Path tmpPath = Path(rrep->getOriginatorAddr(), rrep->getDestAddr());
+
+            auto element = totalNodeUtilzation.find(tmpPath);
+
+            if (element != totalNodeUtilzation.end())
+            {
+                element->second->transmissionOverhead.pathHops = rrep->getTotalHopsToDest();
+                element->second->transmissionOverhead.position = NodeUtilization::Position::SENDER;
+            }
+            else
+            {
+                totalNodeUtilzation[tmpPath] = new NodeUtilization(rrep->getTotalHopsToDest(), NodeUtilization::Position::SENDER);
+            }
+
             EV_INFO << "The Route Reply has arrived for our Route Request to node " << rrep->getDestAddr() << endl;
             updateRoutingTable(destRoute, sourceAddr, newHopCount, true, destSeqNum, true, simTime() + lifeTime);
             completeRouteDiscovery(rrep->getDestAddr());
@@ -1108,17 +1123,7 @@ void AODVQoSRouting::handleRREQ(AODVQoSRREQ *rreq, const L3Address& sourceAddr, 
             updateRoutingTable(reverseRoute, sourceAddr, hopCount, true, newSeqNum, true, newLifeTime);
         }
     }
-    /****************************************************/
-    /******************QoS-Extended**********************/
-    /****************************************************/
-//    double* utilization = determineUtilization();
-    double result = determineQoSRREQTreatment(rreq->getMinAvailableBandwidth(), rreq->getMinAvailableSlotTime());
-//    std::cout << host->getFullName() << ": decision: " << result << endl;
-    if (result == -1 && !routingTable->isLocalAddress(rreq->getDestAddr()))
-    {
-        delete rreq;
-        return;
-    }
+
 // A node generates a RREP if either:
 //
 // (i)       it is itself the destination, or
@@ -1143,7 +1148,20 @@ void AODVQoSRouting::handleRREQ(AODVQoSRREQ *rreq, const L3Address& sourceAddr, 
 
         // create RREP
         AODVQoSRREP *rrep = createQoSRREP(rreq, destRoute, reverseRoute, sourceAddr);
-        totalNodeUtilzation[ { rreq->getOriginatorAddr(), rreq->getDestAddr() }] = new NodeUtilization(rrep->getTotalHopsToDest(), NodeUtilization::Position::RECEIVER);
+
+        Path tmpPath = Path(rreq->getOriginatorAddr(), rreq->getDestAddr());
+        auto element = totalNodeUtilzation.find(tmpPath);
+
+        if (element != totalNodeUtilzation.end())
+        {
+            element->second->transmissionOverhead.pathHops = rrep->getTotalHopsToDest();
+            element->second->transmissionOverhead.pathHops = NodeUtilization::Position::RECEIVER;
+        }
+        else
+        {
+            totalNodeUtilzation[tmpPath] = new NodeUtilization(rrep->getTotalHopsToDest(), NodeUtilization::Position::RECEIVER);
+        }
+
         // send to the originator
         sendRREP(rrep, rreq->getOriginatorAddr(), 255);
 
@@ -1160,6 +1178,16 @@ void AODVQoSRouting::handleRREQ(AODVQoSRREQ *rreq, const L3Address& sourceAddr, 
         {
             EV_WARN << "This RREP would make a loop. Dropping it" << endl;
 
+            delete rreq;
+            return;
+        }
+
+        /****************************************************/
+        /******************QoS-Extended**********************/
+        /****************************************************/
+        double result = determineQoSRREQTreatment(rreq->getMinAvailableBandwidth(), rreq->getMinAvailableSlotTime());
+        if (result == -1 && !routingTable->isLocalAddress(rreq->getDestAddr()))
+        {
             delete rreq;
             return;
         }
@@ -1208,7 +1236,7 @@ void AODVQoSRouting::handleRREQ(AODVQoSRREQ *rreq, const L3Address& sourceAddr, 
         rreq->setUnknownSeqNumFlag(false);
 
         AODVQoSRREQ *outgoingRREQ = rreq->dup();
-        forwardRREQ(outgoingRREQ, timeToLive, result);
+        forwardRREQ(outgoingRREQ, timeToLive);
     }
     else
         EV_WARN << "Can't forward the RREQ because of its small (<= 1) TTL: " << timeToLive << " or the AODV reboot has not completed yet" << endl;
